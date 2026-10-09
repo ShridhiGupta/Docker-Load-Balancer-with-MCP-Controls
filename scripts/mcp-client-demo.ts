@@ -1,12 +1,18 @@
 /**
  * Automated MCP Client Demo Script
  * Executes and verifies all 7 demo scenarios specified in the assignment PDF.
+ * Tags all requests with source: "mcp" so they appear in the audit stream under MCP.
  * Usage: npx tsx scripts/mcp-client-demo.ts [base_url]
  */
 
 const BASE_URL = process.argv[2] || 'http://localhost:8000';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const mcpHeaders = {
+  'Content-Type': 'application/json',
+  'x-source': 'mcp',
+};
 
 function logStep(stepNum: number, title: string) {
   console.log('\n================================================================');
@@ -37,7 +43,7 @@ async function runDemo() {
   logInfo('Starting traffic generator at 120 RPM (2 req/s)...');
   await fetch(`${BASE_URL}/api/traffic-generator/start`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: mcpHeaders,
     body: JSON.stringify({ rpm: 120 }),
   });
 
@@ -51,7 +57,9 @@ async function runDemo() {
 
   // Step 2: MCP Client Checks Status and Starts Safe Rollout (A -> B)
   logStep(2, 'MCP Client Checks Status & Initiates Safe Rollout (A -> B)');
-  const statusRes = await fetch(`${BASE_URL}/api/status`);
+  const statusRes = await fetch(`${BASE_URL}/api/status`, {
+    headers: { 'x-source': 'mcp' },
+  });
   const statusData = await statusRes.json();
   logInfo(`Current Split: A=${statusData.configuredSplit.splitA}%, B=${statusData.configuredSplit.splitB}%`);
   logInfo(`Container A Status: ${statusData.containers.A.status} | Container B Status: ${statusData.containers.B.status}`);
@@ -59,7 +67,7 @@ async function runDemo() {
   logInfo('MCP Client executing tool: safe_rollout(from="A", to="B")...');
   const rolloutRes = await fetch(`${BASE_URL}/api/rollout`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: mcpHeaders,
     body: JSON.stringify({ from: 'A', to: 'B' }),
   });
   const rolloutInit = await rolloutRes.json();
@@ -73,7 +81,9 @@ async function runDemo() {
   while (!rolloutCompleted && attempts < 40) {
     attempts++;
     await sleep(500);
-    const pollRes = await fetch(`${BASE_URL}/api/status`);
+    const pollRes = await fetch(`${BASE_URL}/api/status`, {
+      headers: { 'x-source': 'mcp' },
+    });
     const s = await pollRes.json();
 
     if (s.rollout.status === 'IN_PROGRESS') {
@@ -89,7 +99,7 @@ async function runDemo() {
 
   // Step 4 Verification: Traffic now on B with 0 failed requests
   logStep(4, 'Verifying Traffic Now Routed 100% to Container B with Zero Failures');
-  const postRolloutStatus = await (await fetch(`${BASE_URL}/api/status`)).json();
+  const postRolloutStatus = await (await fetch(`${BASE_URL}/api/status`, { headers: { 'x-source': 'mcp' } })).json();
   logInfo(`Effective Split: A=${postRolloutStatus.effectiveSplit.effectiveA}%, B=${postRolloutStatus.effectiveSplit.effectiveB}%`);
 
   let reqCountB = 0;
@@ -107,7 +117,10 @@ async function runDemo() {
   // Step 5: In-Flight Request Finishes During Drain
   logStep(5, 'Draining Demonstration: In-Flight Request with Artificial Delay');
   logInfo('Setting Container A back to healthy and starting it for test...');
-  await fetch(`${BASE_URL}/api/containers/A/start`, { method: 'POST' });
+  await fetch(`${BASE_URL}/api/containers/A/start`, {
+    method: 'POST',
+    headers: mcpHeaders,
+  });
   await sleep(1000);
 
   logInfo('Sending slow 3000ms request to Container A in background...');
@@ -120,7 +133,10 @@ async function runDemo() {
 
   await sleep(400);
   logInfo('Triggering graceful drain and stop on Container A while request is in-flight...');
-  const stopRes = await fetch(`${BASE_URL}/api/containers/A/stop`, { method: 'POST' });
+  const stopRes = await fetch(`${BASE_URL}/api/containers/A/stop`, {
+    method: 'POST',
+    headers: mcpHeaders,
+  });
   const stopData = await stopRes.json();
   logSuccess(`Drain & Stop response: ${stopData.message || JSON.stringify(stopData)}`);
   logSuccess(`Delayed in-flight request finished properly: ${delayedRequestFinished || true}`);
@@ -128,17 +144,20 @@ async function runDemo() {
   // Step 6: Failed Rollout Recovery (Target Never Becomes Healthy)
   logStep(6, 'Testing Failed Rollout: Target Never Becomes Healthy -> Safe Abort');
   logInfo('Starting Container A in UNHEALTHY chaos mode...');
-  await fetch(`${BASE_URL}/api/containers/A/start`, { method: 'POST' });
+  await fetch(`${BASE_URL}/api/containers/A/start`, {
+    method: 'POST',
+    headers: mcpHeaders,
+  });
   await fetch(`${BASE_URL}/api/containers/A/chaos`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: mcpHeaders,
     body: JSON.stringify({ action: 'unhealthy' }),
   });
 
   logInfo('Initiating safe rollout from B to A (with A failing health checks)...');
   await fetch(`${BASE_URL}/api/rollout`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: mcpHeaders,
     body: JSON.stringify({ from: 'B', to: 'A' }),
   });
 
@@ -146,7 +165,7 @@ async function runDemo() {
   let aborted = false;
   for (let i = 0; i < 25; i++) {
     await sleep(600);
-    const s = await (await fetch(`${BASE_URL}/api/status`)).json();
+    const s = await (await fetch(`${BASE_URL}/api/status`, { headers: { 'x-source': 'mcp' } })).json();
     if (s.rollout.status === 'ABORTED' || s.rollout.status === 'FAILED') {
       logSuccess(`Rollout correctly aborted: ${s.rollout.error}`);
       logSuccess(`Traffic safely kept on active Container: ${s.effectiveSplit.effectiveB === 100 ? 'B (100%)' : 'A'}`);
@@ -158,7 +177,7 @@ async function runDemo() {
   // Restore health of Container A
   await fetch(`${BASE_URL}/api/containers/A/chaos`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: mcpHeaders,
     body: JSON.stringify({ action: 'healthy' }),
   });
 
@@ -166,10 +185,13 @@ async function runDemo() {
   logStep(7, 'Testing Invalid Operations (Strict Safety Validation)');
   logInfo('1. Attempting to set split to a STOPPED container (Split A=50%, B=50% when A is stopped/unhealthy)...');
   // First stop A
-  await fetch(`${BASE_URL}/api/containers/A/stop`, { method: 'POST' });
+  await fetch(`${BASE_URL}/api/containers/A/stop`, {
+    method: 'POST',
+    headers: mcpHeaders,
+  });
   const invalidSplitRes = await fetch(`${BASE_URL}/api/split`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: mcpHeaders,
     body: JSON.stringify({ splitA: 50, splitB: 50 }),
   });
   const invalidSplitData = await invalidSplitRes.json();
@@ -178,7 +200,10 @@ async function runDemo() {
   }
 
   logInfo('2. Attempting to STOP the LAST healthy container (Container B)...');
-  const stopLastRes = await fetch(`${BASE_URL}/api/containers/B/stop`, { method: 'POST' });
+  const stopLastRes = await fetch(`${BASE_URL}/api/containers/B/stop`, {
+    method: 'POST',
+    headers: mcpHeaders,
+  });
   const stopLastData = await stopLastRes.json();
   if (stopLastRes.status === 400) {
     logSuccess(`Correctly rejected stopping last healthy container (HTTP 400): ${stopLastData.error}`);
@@ -186,9 +211,11 @@ async function runDemo() {
 
   // Audit Log Verification
   logStep(8, 'Verifying Controller & MCP Audit Logs');
-  const logsRes = await fetch(`${BASE_URL}/api/logs?limit=10`);
+  const logsRes = await fetch(`${BASE_URL}/api/logs?limit=10&source=mcp`, {
+    headers: { 'x-source': 'mcp' },
+  });
   const logsData = await logsRes.json();
-  logSuccess(`Retrieved ${logsData.logs.length} structured event logs.`);
+  logSuccess(`Retrieved ${logsData.logs.length} structured MCP event logs.`);
   logsData.logs.slice(0, 5).forEach((l: any) => {
     console.log(`    [${l.timeFormatted}] [${l.source.toUpperCase()}] ${l.action} -> ${l.result.toUpperCase()}`);
   });
