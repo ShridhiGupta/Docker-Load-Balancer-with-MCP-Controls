@@ -549,49 +549,5 @@ btnRefresh.addEventListener('click', async () => {
   updateUI(status);
 });
 
-// Fullscreen Control
-function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch((err) => {
-      console.warn('Error attempting to enable fullscreen:', err.message);
-    });
-  } else {
-    if (document.exitFullscreen) {
-      document.exitFullscreen().catch((err) => {
-        console.warn('Error attempting to exit fullscreen:', err.message);
-      });
-    }
-  }
-}
-
-const btnFullscreen = document.getElementById('btn-fullscreen');
-const btnCardFullscreen = document.getElementById('btn-card-fullscreen');
-const fullscreenText = document.getElementById('fullscreen-text');
-const cardFullscreenText = document.getElementById('card-fullscreen-text');
-const fullscreenIcon = document.getElementById('fullscreen-icon');
-
-if (btnFullscreen) {
-  btnFullscreen.addEventListener('click', toggleFullscreen);
-}
-
-if (btnCardFullscreen) {
-  btnCardFullscreen.addEventListener('click', toggleFullscreen);
-}
-
-document.addEventListener('fullscreenchange', () => {
-  const isFull = !!document.fullscreenElement;
-  if (fullscreenText) {
-    fullscreenText.textContent = isFull ? 'Exit Full' : 'Fullscreen';
-  }
-  if (cardFullscreenText) {
-    cardFullscreenText.textContent = isFull ? 'Exit Full' : 'Fullscreen';
-  }
-  if (fullscreenIcon) {
-    fullscreenIcon.innerHTML = isFull
-      ? '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />'
-      : '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />';
-  }
-});
-
 // Boot
 connectSSE();
