@@ -277,7 +277,7 @@ function formatLocalTime(isoStr, fallbackStr) {
         hour12: true,
       });
     }
-  } catch (e) {}
+  } catch (e) { }
   return fallbackStr || isoStr;
 }
 

@@ -68,7 +68,8 @@ apiRouter.post('/containers/:id/start', async (req: Request, res: Response) => {
   const result = await rolloutManager.startContainerAndWait(id, source, timeoutMs);
 
   if (!result.success) {
-    res.status(500).json({ error: result.error || result.message });
+    const statusCode = result.error?.includes('in progress') ? 409 : 500;
+    res.status(statusCode).json({ error: result.error || result.message });
     return;
   }
 
@@ -85,7 +86,8 @@ apiRouter.post('/containers/:id/stop', async (req: Request, res: Response) => {
 
   const result = await rolloutManager.gracefulStop(id, source);
   if (!result.success) {
-    res.status(400).json({ error: result.error || result.message });
+    const statusCode = result.error?.includes('in progress') ? 409 : 400;
+    res.status(statusCode).json({ error: result.error || result.message });
     return;
   }
 

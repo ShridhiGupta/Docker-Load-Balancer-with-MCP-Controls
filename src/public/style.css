@@ -2,17 +2,27 @@
 
 :root {
   /* Design Brief Color Tokens */
-  --color-primary: #5B14F5;          /* logo, links, "01" numbers, arrows, "Read more →" */
+  --color-primary: #5B14F5;
+  /* logo, links, "01" numbers, arrows, "Read more →" */
   --color-primary-hover: #4A0FD0;
-  --color-primary-soft: #9B7CFF;     /* light purple, charts and highlights */
-  --color-accent-pink: #FF3D9A;      /* secondary accent, chart highlights */
-  --color-bg: #FFFFFF;               /* page and card background */
-  --color-bg-dark: #0A0620;          /* dark research/feature card background */
-  --color-text-heading: #0F0A2E;     /* deep navy, near-black headings */
-  --color-text-body: #4A4A68;        /* paragraph and description text */
-  --color-text-muted: #9A9AAA;       /* footer headings, disabled states, small labels */
-  --color-border: #E8E4FA;           /* very light lavender card and pill borders */
-  --color-divider: #1A1240;          /* footer divider line */
+  --color-primary-soft: #9B7CFF;
+  /* light purple, charts and highlights */
+  --color-accent-pink: #FF3D9A;
+  /* secondary accent, chart highlights */
+  --color-bg: #FFFFFF;
+  /* page and card background */
+  --color-bg-dark: #0A0620;
+  /* dark research/feature card background */
+  --color-text-heading: #0F0A2E;
+  /* deep navy, near-black headings */
+  --color-text-body: #4A4A68;
+  /* paragraph and description text */
+  --color-text-muted: #9A9AAA;
+  /* footer headings, disabled states, small labels */
+  --color-border: #E8E4FA;
+  /* very light lavender card and pill borders */
+  --color-divider: #1A1240;
+  /* footer divider line */
 
   /* Secondary Chart / Data Viz Tokens */
   --color-teal: #3FBFCB;
@@ -216,8 +226,15 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .banner-msg {
