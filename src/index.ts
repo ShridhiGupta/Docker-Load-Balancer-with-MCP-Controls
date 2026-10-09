@@ -17,6 +17,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Disable caching for live frontend assets
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // Serve Static Frontend Dashboard
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));

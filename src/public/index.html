@@ -10,7 +10,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700;800&family=Montserrat:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 
 <body>
@@ -153,13 +153,16 @@
     <div class="saas-card">
       <div>
         <div class="card-top-bar">
-          <span class="card-number">02</span>
-          <span class="pill-status" style="font-size: 0.72rem; padding: 0.25rem 0.6rem;" id="active-split-label">A: 100%
-            | B: 0%</span>
-          <button class="arrow-circle-btn" id="btn-card-fullscreen" title="Toggle Fullscreen">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <span class="card-number">02</span>
+            <span class="pill-status" style="font-size: 0.72rem; padding: 0.25rem 0.6rem;" id="active-split-label">A: 100%
+              | B: 0%</span>
+          </div>
+          <button class="btn-saas-pill btn-saas-sm" id="btn-card-fullscreen" title="Toggle Fullscreen Mode">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
             </svg>
+            <span id="card-fullscreen-text">Fullscreen</span>
           </button>
         </div>
         <div class="card-header-title">Traffic Split Controller</div>
@@ -399,7 +402,7 @@
     </div>
   </footer>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=4"></script>
 </body>
 
 </html>

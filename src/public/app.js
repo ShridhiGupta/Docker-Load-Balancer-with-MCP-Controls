@@ -567,6 +567,7 @@ function toggleFullscreen() {
 const btnFullscreen = document.getElementById('btn-fullscreen');
 const btnCardFullscreen = document.getElementById('btn-card-fullscreen');
 const fullscreenText = document.getElementById('fullscreen-text');
+const cardFullscreenText = document.getElementById('card-fullscreen-text');
 const fullscreenIcon = document.getElementById('fullscreen-icon');
 
 if (btnFullscreen) {
@@ -581,6 +582,9 @@ document.addEventListener('fullscreenchange', () => {
   const isFull = !!document.fullscreenElement;
   if (fullscreenText) {
     fullscreenText.textContent = isFull ? 'Exit Full' : 'Fullscreen';
+  }
+  if (cardFullscreenText) {
+    cardFullscreenText.textContent = isFull ? 'Exit Full' : 'Fullscreen';
   }
   if (fullscreenIcon) {
     fullscreenIcon.innerHTML = isFull
