@@ -165,17 +165,19 @@
         </div>
 
         <div class="slider-labels-row">
-          <span>100% A (0% B)</span>
+          <span>100% A</span>
+          <span>80 / 20</span>
           <span>50 / 50</span>
-          <span>100% B (0% A)</span>
+          <span>20 / 80</span>
+          <span>100% B</span>
         </div>
-        <input type="range" min="0" max="100" value="100" class="saas-slider" id="split-slider" />
+        <input type="range" min="0" max="100" value="50" class="saas-slider" id="split-slider" />
 
-        <div class="preset-btns-row">
-          <button class="btn-saas-pill btn-saas-sm" id="btn-split-100-0">100% A</button>
-          <button class="btn-saas-pill btn-saas-sm" id="btn-split-50-50">50 / 50</button>
-          <button class="btn-saas-pill btn-saas-sm" id="btn-split-0-100">100% B</button>
-          <button class="btn-saas-pill btn-saas-sm btn-saas-primary" id="btn-apply-split">Apply</button>
+        <!-- Apply Split Button -->
+        <div class="apply-split-wrap">
+          <button class="btn-apply-split-full" id="btn-apply-split">
+            Apply Split
+          </button>
         </div>
       </div>
 

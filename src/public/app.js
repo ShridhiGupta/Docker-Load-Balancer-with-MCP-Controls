@@ -51,9 +51,6 @@ const splitBarFillA = document.getElementById('split-bar-fill-a');
 const splitBarFillB = document.getElementById('split-bar-fill-b');
 const barPctA = document.getElementById('bar-pct-a');
 const barPctB = document.getElementById('bar-pct-b');
-const btnSplit100_0 = document.getElementById('btn-split-100-0');
-const btnSplit50_50 = document.getElementById('btn-split-50-50');
-const btnSplit0_100 = document.getElementById('btn-split-0-100');
 const btnApplySplit = document.getElementById('btn-apply-split');
 
 // Rollout
@@ -160,17 +157,19 @@ function updateUI(status) {
   updateContainerCard('B', status.containers.B, badgeStatusB, healthTextB, inflightB, servedB);
 
   // Visual Split Display
-  const effA = status.effectiveSplit.effectiveA;
-  const effB = status.effectiveSplit.effectiveB;
-  splitBarFillA.style.width = `${effA}%`;
-  splitBarFillB.style.width = `${effB}%`;
-  barPctA.textContent = `${effA}%`;
-  barPctB.textContent = `${effB}%`;
-  activeSplitLabel.textContent = `Configured: ${status.configuredSplit.splitA}% / ${status.configuredSplit.splitB}% (Effective: ${effA}% / ${effB}%)`;
+  if (!isUserEditingSplit && !isDraggingSlider) {
+    const effA = status.effectiveSplit.effectiveA;
+    const effB = status.effectiveSplit.effectiveB;
+    splitBarFillA.style.width = `${effA}%`;
+    splitBarFillB.style.width = `${effB}%`;
+    barPctA.textContent = `${effA}%`;
+    barPctB.textContent = `${effB}%`;
+    activeSplitLabel.textContent = `Configured: ${status.configuredSplit.splitA}% / ${status.configuredSplit.splitB}% (Effective: ${effA}% / ${effB}%)`;
 
-  // Synchronize slider position with configured split
-  if (!isDraggingSlider && status.configuredSplit) {
-    splitSlider.value = status.configuredSplit.splitA;
+    // Synchronize slider position with configured split
+    if (status.configuredSplit) {
+      splitSlider.value = status.configuredSplit.splitA;
+    }
   }
 
   // Safe Rollout Banner
@@ -316,42 +315,32 @@ function renderLogs() {
 // Event Listeners
 
 let isDraggingSlider = false;
+let isUserEditingSplit = false;
 
-// Split Slider & Buttons
-splitSlider.addEventListener('mousedown', () => { isDraggingSlider = true; });
-splitSlider.addEventListener('touchstart', () => { isDraggingSlider = true; });
-window.addEventListener('mouseup', () => { isDraggingSlider = false; });
-window.addEventListener('touchend', () => { isDraggingSlider = false; });
-
-splitSlider.addEventListener('input', (e) => {
-  const a = parseInt(e.target.value, 10);
+function syncVisualSplit(valA) {
+  const a = Math.max(0, Math.min(100, Math.round(Number(valA) || 0)));
   const b = 100 - a;
   barPctA.textContent = `${a}%`;
   barPctB.textContent = `${b}%`;
   splitBarFillA.style.width = `${a}%`;
   splitBarFillB.style.width = `${b}%`;
-});
+  splitSlider.value = a;
+  isUserEditingSplit = true;
+  if (btnApplySplit) btnApplySplit.classList.add('dirty');
+}
 
-btnSplit100_0.addEventListener('click', () => {
-  splitSlider.value = 100;
-  splitSlider.dispatchEvent(new Event('input'));
-  applySplit(100, 0);
-});
+// Split Slider
+splitSlider.addEventListener('mousedown', () => { isDraggingSlider = true; isUserEditingSplit = true; });
+splitSlider.addEventListener('touchstart', () => { isDraggingSlider = true; isUserEditingSplit = true; });
+window.addEventListener('mouseup', () => { isDraggingSlider = false; });
+window.addEventListener('touchend', () => { isDraggingSlider = false; });
 
-btnSplit50_50.addEventListener('click', () => {
-  splitSlider.value = 50;
-  splitSlider.dispatchEvent(new Event('input'));
-  applySplit(50, 50);
-});
-
-btnSplit0_100.addEventListener('click', () => {
-  splitSlider.value = 0;
-  splitSlider.dispatchEvent(new Event('input'));
-  applySplit(0, 100);
+splitSlider.addEventListener('input', (e) => {
+  syncVisualSplit(e.target.value);
 });
 
 btnApplySplit.addEventListener('click', () => {
-  const a = parseInt(splitSlider.value, 10);
+  const a = parseInt(splitSlider.value, 10) || 0;
   const b = 100 - a;
   applySplit(a, b);
 });
@@ -365,8 +354,28 @@ async function applySplit(splitA, splitB) {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(`Split Rejected: ${data.error}`);
+      // Check if error is due to a container being stopped
+      if (data.error && data.error.includes('STOPPED')) {
+        const targetContainer = splitA > 0 && data.error.includes('Container A') ? 'A' : 'B';
+        const startConfirm = confirm(
+          `Container ${targetContainer} is currently STOPPED.\n\nWould you like to start Container ${targetContainer} now and apply the ${splitA}% / ${splitB}% traffic split?`
+        );
+        if (startConfirm) {
+          const startRes = await fetch(`/api/containers/${targetContainer}/start`, { method: 'POST' });
+          if (startRes.ok) {
+            return applySplit(splitA, splitB);
+          } else {
+            const startErr = await startRes.json();
+            alert(`Failed to start Container ${targetContainer}: ${startErr.error}`);
+          }
+        }
+      } else {
+        alert(`Split Rejected: ${data.error}`);
+      }
+      return;
     }
+    isUserEditingSplit = false;
+    if (btnApplySplit) btnApplySplit.classList.remove('dirty');
   } catch (err) {
     alert(`Failed to apply split: ${err.message}`);
   }

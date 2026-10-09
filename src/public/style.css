@@ -43,6 +43,12 @@
   --font-heading: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Montserrat', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
 }
 
 * {
@@ -561,11 +567,47 @@ body {
   transform: scale(1.2);
 }
 
-.preset-btns-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+.apply-split-wrap {
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.btn-apply-split-full {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border-radius: 9999px;
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  box-shadow: 0 4px 14px rgba(91, 20, 245, 0.25);
+  transition: all var(--transition-fast);
+}
+
+.btn-apply-split-full:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(91, 20, 245, 0.35);
+}
+
+.btn-apply-split-full:active {
+  transform: translateY(0);
+}
+
+.btn-apply-split-full.dirty {
+  animation: pulse-glow 1.5s infinite;
+  box-shadow: 0 0 0 4px rgba(91, 20, 245, 0.35);
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(91, 20, 245, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(91, 20, 245, 0); }
 }
 
 /* Rollout Box in Center Card */
