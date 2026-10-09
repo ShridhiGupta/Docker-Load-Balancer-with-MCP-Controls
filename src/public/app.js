@@ -46,15 +46,16 @@ const btnDelayB = document.getElementById('btn-delay-b');
 
 // Traffic Split
 const splitSlider = document.getElementById('split-slider');
+const inputSplitA = document.getElementById('input-split-a');
+const inputSplitB = document.getElementById('input-split-b');
 const activeSplitLabel = document.getElementById('active-split-label');
 const splitBarFillA = document.getElementById('split-bar-fill-a');
 const splitBarFillB = document.getElementById('split-bar-fill-b');
 const barPctA = document.getElementById('bar-pct-a');
 const barPctB = document.getElementById('bar-pct-b');
-const btnSplit100_0 = document.getElementById('btn-split-100-0');
-const btnSplit50_50 = document.getElementById('btn-split-50-50');
-const btnSplit0_100 = document.getElementById('btn-split-0-100');
 const btnApplySplit = document.getElementById('btn-apply-split');
+const toggleAutoApply = document.getElementById('toggle-auto-apply');
+const splitFeedbackMsg = document.getElementById('split-feedback-msg');
 
 // Rollout
 const btnRolloutAtoB = document.getElementById('btn-rollout-a-to-b');
@@ -168,9 +169,13 @@ function updateUI(status) {
   barPctB.textContent = `${effB}%`;
   activeSplitLabel.textContent = `Configured: ${status.configuredSplit.splitA}% / ${status.configuredSplit.splitB}% (Effective: ${effA}% / ${effB}%)`;
 
-  // Synchronize slider position with configured split
-  if (!isDraggingSlider && status.configuredSplit) {
-    splitSlider.value = status.configuredSplit.splitA;
+  // Synchronize slider and inputs with configured split
+  if (!isDraggingSlider && !isTypingSplit && status.configuredSplit) {
+    const a = status.configuredSplit.splitA;
+    const b = status.configuredSplit.splitB;
+    splitSlider.value = a;
+    if (inputSplitA) inputSplitA.value = a;
+    if (inputSplitB) inputSplitB.value = b;
   }
 
   // Safe Rollout Banner
@@ -316,47 +321,125 @@ function renderLogs() {
 // Event Listeners
 
 let isDraggingSlider = false;
+let isTypingSplit = false;
+let autoApplyDebounceTimer = null;
+let feedbackTimer = null;
 
-// Split Slider & Buttons
+function updateVisualSplit(a, b) {
+  splitBarFillA.style.width = `${a}%`;
+  splitBarFillB.style.width = `${b}%`;
+  barPctA.textContent = `${a}%`;
+  barPctB.textContent = `${b}%`;
+}
+
+function showSplitFeedback(msg, isSuccess) {
+  if (!splitFeedbackMsg) return;
+  if (feedbackTimer) clearTimeout(feedbackTimer);
+  splitFeedbackMsg.innerHTML = msg;
+  splitFeedbackMsg.className = `split-feedback-msg ${isSuccess ? 'show-success' : 'show-error'}`;
+  feedbackTimer = setTimeout(() => {
+    splitFeedbackMsg.className = 'split-feedback-msg';
+  }, 4000);
+}
+
+function syncFromA(rawVal, triggerAuto = false) {
+  let a = parseInt(rawVal, 10);
+  if (isNaN(a)) a = 0;
+  a = Math.max(0, Math.min(100, a));
+  const b = 100 - a;
+
+  inputSplitA.value = a;
+  inputSplitB.value = b;
+  splitSlider.value = a;
+  updateVisualSplit(a, b);
+
+  if (triggerAuto && toggleAutoApply && toggleAutoApply.checked) {
+    if (autoApplyDebounceTimer) clearTimeout(autoApplyDebounceTimer);
+    autoApplyDebounceTimer = setTimeout(() => {
+      applySplit(a, b);
+    }, 350);
+  }
+}
+
+function syncFromB(rawVal, triggerAuto = false) {
+  let b = parseInt(rawVal, 10);
+  if (isNaN(b)) b = 0;
+  b = Math.max(0, Math.min(100, b));
+  const a = 100 - b;
+
+  inputSplitA.value = a;
+  inputSplitB.value = b;
+  splitSlider.value = a;
+  updateVisualSplit(a, b);
+
+  if (triggerAuto && toggleAutoApply && toggleAutoApply.checked) {
+    if (autoApplyDebounceTimer) clearTimeout(autoApplyDebounceTimer);
+    autoApplyDebounceTimer = setTimeout(() => {
+      applySplit(a, b);
+    }, 350);
+  }
+}
+
+// Split Slider & Input Event Listeners
 splitSlider.addEventListener('mousedown', () => { isDraggingSlider = true; });
 splitSlider.addEventListener('touchstart', () => { isDraggingSlider = true; });
 window.addEventListener('mouseup', () => { isDraggingSlider = false; });
 window.addEventListener('touchend', () => { isDraggingSlider = false; });
 
+if (inputSplitA) {
+  inputSplitA.addEventListener('focus', () => { isTypingSplit = true; });
+  inputSplitA.addEventListener('blur', () => {
+    isTypingSplit = false;
+    const val = Math.max(0, Math.min(100, parseInt(inputSplitA.value || '0', 10)));
+    applySplit(val, 100 - val);
+  });
+  inputSplitA.addEventListener('input', (e) => syncFromA(e.target.value, true));
+  inputSplitA.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const val = Math.max(0, Math.min(100, parseInt(inputSplitA.value || '0', 10)));
+      applySplit(val, 100 - val);
+      inputSplitA.blur();
+    }
+  });
+}
+
+if (inputSplitB) {
+  inputSplitB.addEventListener('focus', () => { isTypingSplit = true; });
+  inputSplitB.addEventListener('blur', () => {
+    isTypingSplit = false;
+    const val = Math.max(0, Math.min(100, parseInt(inputSplitB.value || '0', 10)));
+    applySplit(100 - val, val);
+  });
+  inputSplitB.addEventListener('input', (e) => syncFromB(e.target.value, true));
+  inputSplitB.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const val = Math.max(0, Math.min(100, parseInt(inputSplitB.value || '0', 10)));
+      applySplit(100 - val, val);
+      inputSplitB.blur();
+    }
+  });
+}
+
 splitSlider.addEventListener('input', (e) => {
+  syncFromA(e.target.value, true);
+});
+
+splitSlider.addEventListener('change', (e) => {
   const a = parseInt(e.target.value, 10);
-  const b = 100 - a;
-  barPctA.textContent = `${a}%`;
-  barPctB.textContent = `${b}%`;
-  splitBarFillA.style.width = `${a}%`;
-  splitBarFillB.style.width = `${b}%`;
-});
-
-btnSplit100_0.addEventListener('click', () => {
-  splitSlider.value = 100;
-  splitSlider.dispatchEvent(new Event('input'));
-  applySplit(100, 0);
-});
-
-btnSplit50_50.addEventListener('click', () => {
-  splitSlider.value = 50;
-  splitSlider.dispatchEvent(new Event('input'));
-  applySplit(50, 50);
-});
-
-btnSplit0_100.addEventListener('click', () => {
-  splitSlider.value = 0;
-  splitSlider.dispatchEvent(new Event('input'));
-  applySplit(0, 100);
+  applySplit(a, 100 - a);
 });
 
 btnApplySplit.addEventListener('click', () => {
-  const a = parseInt(splitSlider.value, 10);
+  const a = parseInt(inputSplitA ? inputSplitA.value : splitSlider.value, 10);
   const b = 100 - a;
   applySplit(a, b);
 });
 
 async function applySplit(splitA, splitB) {
+  if (btnApplySplit) {
+    btnApplySplit.disabled = true;
+    btnApplySplit.textContent = 'Applying...';
+  }
   try {
     const res = await fetch('/api/split', {
       method: 'POST',
@@ -365,10 +448,22 @@ async function applySplit(splitA, splitB) {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(`Split Rejected: ${data.error}`);
+      if (data.error && data.error.includes('STOPPED')) {
+        const cTarget = data.error.includes('Container B') ? 'B' : 'A';
+        showSplitFeedback(`Cannot route traffic: Container ${cTarget} is STOPPED. <button class="btn-saas-pill btn-saas-sm btn-saas-primary" style="font-size: 0.68rem; padding: 0.15rem 0.55rem; margin-left: 0.4rem; vertical-align: middle;" onclick="containerAction('${cTarget}', 'start')">Start ${cTarget} Now</button>`, false);
+      } else {
+        showSplitFeedback(`Split Rejected: ${data.error}`, false);
+      }
+    } else {
+      showSplitFeedback(`✓ Split applied: ${splitA}% A / ${splitB}% B`, true);
     }
   } catch (err) {
-    alert(`Failed to apply split: ${err.message}`);
+    showSplitFeedback(`Failed to apply split: ${err.message}`, false);
+  } finally {
+    if (btnApplySplit) {
+      btnApplySplit.disabled = false;
+      btnApplySplit.textContent = 'Apply Split';
+    }
   }
 }
 
