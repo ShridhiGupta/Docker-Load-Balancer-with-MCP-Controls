@@ -1,0 +1,43 @@
+{
+  "name": "docker-load-balancer-mcp",
+  "version": "1.0.0",
+  "description": "Production-grade Docker Load Balancer with MCP Controls, Live Dashboard, and Safe Rollouts",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && node -e \"const fs = require('fs'); fs.cpSync('src/public', 'dist/public', {recursive: true});\"",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "mcp:stdio": "tsx src/mcp/stdio-runner.ts",
+    "traffic:cli": "tsx scripts/traffic-cli.ts",
+    "demo": "tsx scripts/mcp-client-demo.ts",
+    "test": "tsx scripts/test-all.ts"
+  },
+  "keywords": [
+    "load-balancer",
+    "docker",
+    "mcp",
+    "model-context-protocol",
+    "traffic-management",
+    "zero-downtime",
+    "canary-rollout"
+  ],
+  "author": "Botpresso Systems Engineering",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "cors": "^2.8.5",
+    "dockerode": "^4.0.2",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/dockerode": "^3.3.34",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.13.9",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Botpresso | Docker Load Balancer & MCP Controller</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700;800&family=Montserrat:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <!-- Sticky Header -->
+  <header class="navbar">
+    <div class="navbar-brand">
+      <div class="brand-logo-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">Botpresso <span class="brand-tag">LOAD BALANCER</span></div>
+      </div>
+    </div>
+
+    <div class="navbar-right">
+      <div class="pill-status">
+        <span class="dot-pulse" id="sse-status-dot"></span>
+        <span id="sse-status-text">Live SSE Stream</span>
+      </div>
+      <div class="pill-status">
+        <span style="color: var(--color-text-muted);">Uptime:</span>
+        <span id="system-uptime"
+          style="font-family: var(--font-mono); color: var(--color-primary); font-weight: 700;">00:00:00</span>
+      </div>
+      <button class="btn-saas-pill btn-saas-sm" id="btn-refresh" title="Sync state">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+        </svg>
+        Sync
+      </button>
+    </div>
+  </header>
+
+  <!-- Hero Section with Giant Faded Background Text -->
+  <section class="hero-wrapper">
+    <div class="hero-faded-bg-text">BOTPRESSO</div>
+    <div class="hero-content">
+      <span class="hero-eyebrow">Enterprise Traffic Orchestration</span>
+      <h1 class="hero-h1">Zero-Downtime Traffic Balancing with MCP Controls</h1>
+      <p class="hero-desc">
+        Seamlessly route ingress traffic between Docker containers, execute safe 5-step rollouts, and automate cluster
+        operations via Claude, Cursor, and Model Context Protocol.
+      </p>
+    </div>
+  </section>
+
+  <!-- Active Rollout Banner (Dynamically shown during rollout/degraded states) -->
+  <div id="status-banner" class="rollout-banner" style="display: none;">
+    <div class="banner-msg">
+      <span style="color: var(--color-primary); font-size: 1.2rem;">⚡</span>
+      <span id="banner-message">Rollout in progress...</span>
+    </div>
+    <div id="banner-stepper" class="banner-stepper-chips"></div>
+  </div>
+
+  <!-- Key Metrics Row (4 Cards with purple numbering) -->
+  <section class="metrics-row">
+    <div class="metric-pill-card">
+      <div class="metric-top-num">01</div>
+      <div class="metric-title">Ingress Requests</div>
+      <div class="metric-value" id="metric-total-requests">0</div>
+      <div class="metric-subtext"><strong id="metric-success-pct" style="color: var(--color-emerald);">100%</strong>
+        success rate</div>
+    </div>
+    <div class="metric-pill-card">
+      <div class="metric-top-num">02</div>
+      <div class="metric-title">Active Connections</div>
+      <div class="metric-value" id="metric-inflight-total" style="color: var(--color-primary);">0</div>
+      <div class="metric-subtext" style="font-family: var(--font-mono);">A: <span id="metric-inflight-a">0</span> | B:
+        <span id="metric-inflight-b">0</span></div>
+    </div>
+    <div class="metric-pill-card">
+      <div class="metric-top-num">03</div>
+      <div class="metric-title">Effective Split</div>
+      <div class="metric-value" id="metric-split-display"
+        style="color: var(--color-accent-pink); font-family: var(--font-mono);">100 / 0</div>
+      <div class="metric-subtext" id="metric-effective-note">Effective: 100% A | 0% B</div>
+    </div>
+    <div class="metric-pill-card">
+      <div class="metric-top-num">04</div>
+      <div class="metric-title">Average Latency</div>
+      <div class="metric-value" id="metric-latency" style="color: var(--color-teal); font-family: var(--font-mono);">0ms
+      </div>
+      <div class="metric-subtext">P95: <span id="metric-p95" style="font-family: var(--font-mono);">0ms</span></div>
+    </div>
+  </section>
+
+  <!-- Main Workspace (Container A, Split Controller, Container B) -->
+  <main class="workspace-container">
+    <!-- Container A Card -->
+    <div class="saas-card" id="card-container-a">
+      <div>
+        <div class="card-top-bar">
+          <span class="card-number">01</span>
+          <button class="arrow-circle-btn" title="View details">↗</button>
+        </div>
+        <div class="card-header-title">Container A</div>
+        <div class="card-host-subtitle" id="host-a">botpresso-app-a:8001</div>
+
+        <div class="stat-pills-list">
+          <div class="stat-pill-item">
+            <span class="stat-pill-label">Status</span>
+            <span class="badge-status badge-healthy" id="badge-status-a">HEALTHY</span>
+          </div>
+          <div class="stat-pill-item">
+            <span class="stat-pill-label">Readiness</span>
+            <span class="stat-pill-val" id="health-text-a" style="font-size: 0.75rem;">Passing (200 OK)</span>
+          </div>
+          <div class="stat-pill-item">
+            <span class="stat-pill-label">In-Flight</span>
+            <span class="stat-pill-val" id="inflight-a" style="color: var(--color-primary);">0 reqs</span>
+          </div>
+          <div class="stat-pill-item">
+            <span class="stat-pill-label">Total Handled</span>
+            <span class="stat-pill-val" id="served-a">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-grid-2x2">
+        <button class="btn-saas-pill btn-saas-sm" id="btn-start-a">Start</button>
+        <button class="btn-saas-pill btn-saas-sm" id="btn-stop-a">Drain & Stop</button>
+        <button class="btn-saas-pill btn-saas-sm btn-saas-amber" id="btn-chaos-a">Toggle Health</button>
+        <button class="btn-saas-pill btn-saas-sm btn-saas-pink" id="btn-delay-a"
+          title="Add 3s delay to demo draining">+3s Delay</button>
+      </div>
+    </div>
+
+    <!-- Center: Traffic Split & Safe Rollout Controller -->
+    <div class="saas-card">
+      <div>
+        <div class="card-top-bar">
+          <span class="card-number">02</span>
+          <span class="pill-status" style="font-size: 0.72rem; padding: 0.25rem 0.6rem;" id="active-split-label">A: 100%
+            | B: 0%</span>
+        </div>
+        <div class="card-header-title">Traffic Split Controller</div>
+        <div class="card-host-subtitle">Weighted Ingress Distribution</div>
+
+        <!-- Violet-to-Pink Split Bar -->
+        <div class="split-visual-wrap">
+          <div class="split-fill-a" id="split-bar-fill-a" style="width: 100%;">
+            <span>A: <strong id="bar-pct-a">100%</strong></span>
+          </div>
+          <div class="split-fill-b" id="split-bar-fill-b" style="width: 0%;">
+            <span>B: <strong id="bar-pct-b">0%</strong></span>
+          </div>
+        </div>
+
+        <div class="slider-labels-row">
+          <span>100% A (0% B)</span>
+          <span>50 / 50</span>
+          <span>100% B (0% A)</span>
+        </div>
+        <input type="range" min="0" max="100" value="100" class="saas-slider" id="split-slider" />
+
+        <div class="preset-btns-row">
+          <button class="btn-saas-pill btn-saas-sm" id="btn-split-100-0">100% A</button>
+          <button class="btn-saas-pill btn-saas-sm" id="btn-split-50-50">50 / 50</button>
+          <button class="btn-saas-pill btn-saas-sm" id="btn-split-0-100">100% B</button>
+          <button class="btn-saas-pill btn-saas-sm btn-saas-primary" id="btn-apply-split">Apply</button>
+        </div>
+      </div>
+
+      <!-- Safe Rollout Section -->
+      <div class="safe-rollout-box">
+        <div class="rollout-box-title">Zero-Downtime Safe Rollouts</div>
+        <div class="rollout-btns-row">
+          <button class="btn-rollout-saas" id="btn-rollout-a-to-b">
+            Safe Rollout: A &rarr; B ↗
+          </button>
+          <button class="btn-rollout-saas" id="btn-rollout-b-to-a">
+            Safe Rollout: B &rarr; A ↗
+          </button>
+        </div>
+        <div style="font-size: 0.72rem; color: var(--color-text-muted); text-align: center;">
+          5-Stage Lifecycle: <code>Start &rarr; Health &rarr; Shift &rarr; Drain &rarr; Stop</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Container B Card -->
+    <div class="saas-card" id="card-container-b">
+      <div>
+        <div class="card-top-bar">
+          <span class="card-number">03</span>
+          <button class="arrow-circle-btn" title="View details">↗</button>
+        </div>
+        <div class="card-header-title">Container B</div>
+        <div class="card-host-subtitle" id="host-b">botpresso-app-b:8002</div>
+
+        <div class="stat-pills-list">
+          <div class="stat-pill-item">
+            <span class="stat-pill-label">Status</span>
+            <span class="badge-status badge-stopped" id="badge-status-b">STOPPED</span>
+          </div>
+          <div class="stat-pill-item">
+            <span class="stat-pill-label">Readiness</span>
+            <span class="stat-pill-val" id="health-text-b" style="font-size: 0.75rem;">Stopped</span>
+          </div>
+          <div class="stat-pill-item">
+            <span class="stat-pill-label">In-Flight</span>
+            <span class="stat-pill-val" id="inflight-b" style="color: var(--color-accent-pink);">0 reqs</span>
+          </div>
+          <div class="stat-pill-item">
+            <span class="stat-pill-label">Total Handled</span>
+            <span class="stat-pill-val" id="served-b">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-grid-2x2">
+        <button class="btn-saas-pill btn-saas-sm" id="btn-start-b">Start</button>
+        <button class="btn-saas-pill btn-saas-sm" id="btn-stop-b">Drain & Stop</button>
+        <button class="btn-saas-pill btn-saas-sm btn-saas-amber" id="btn-chaos-b">Toggle Health</button>
+        <button class="btn-saas-pill btn-saas-sm btn-saas-pink" id="btn-delay-b"
+          title="Add 3s delay to demo draining">+3s Delay</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Section: Traffic Generator & Dark Research Audit Log (#0A0620) -->
+  <section class="bottom-section-grid">
+    <!-- Traffic Generator Card (White SaaS Card) -->
+    <div class="saas-card">
+      <div>
+        <div class="card-top-bar">
+          <span class="card-number">04</span>
+          <span class="badge-status badge-stopped" id="tg-status-badge">STOPPED</span>
+        </div>
+        <div class="card-header-title">Traffic Generator</div>
+        <div class="card-host-subtitle">Automated Ingress Load Testing</div>
+
+        <div style="margin-bottom: 1rem;">
+          <div class="slider-labels-row">
+            <span>Rate: <strong id="tg-rpm-label" style="color: var(--color-primary);">120 RPM</strong></span>
+            <span id="tg-rps-label" style="color: var(--color-text-muted);">2.0 req/s</span>
+          </div>
+          <input type="range" min="10" max="1200" step="10" value="120" class="saas-slider" id="tg-rpm-slider"
+            style="margin-bottom: 0.75rem;" />
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+          <button class="btn-saas-pill btn-saas-sm btn-saas-primary" id="btn-tg-start">Start Traffic</button>
+          <button class="btn-saas-pill btn-saas-sm" id="btn-tg-stop" disabled>Stop</button>
+          <button class="btn-saas-pill btn-saas-sm" id="btn-tg-reset">Reset</button>
+        </div>
+      </div>
+
+      <div class="tg-stats-5col">
+        <div class="tg-mini-stat">
+          <div class="tg-mini-title">Sent</div>
+          <div class="tg-mini-val" id="tg-metric-sent">0</div>
+        </div>
+        <div class="tg-mini-stat">
+          <div class="tg-mini-title">Success</div>
+          <div class="tg-mini-val" id="tg-metric-success" style="color: var(--color-emerald);">0</div>
+        </div>
+        <div class="tg-mini-stat">
+          <div class="tg-mini-title">Failed</div>
+          <div class="tg-mini-val" id="tg-metric-failed" style="color: var(--color-rose);">0</div>
+        </div>
+        <div class="tg-mini-stat">
+          <div class="tg-mini-title">Served A</div>
+          <div class="tg-mini-val" id="tg-metric-a" style="color: var(--color-primary);">0</div>
+        </div>
+        <div class="tg-mini-stat">
+          <div class="tg-mini-title">Served B</div>
+          <div class="tg-mini-val" id="tg-metric-b" style="color: var(--color-accent-pink);">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dark Feature / Telemetry Card (#0A0620 background for contrast) -->
+    <div class="dark-feature-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div class="dark-card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            style="color: var(--color-primary-soft);">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
+          Live Controller & MCP Audit Stream
+        </div>
+        <div class="dark-filter-group">
+          <button class="log-filter-btn dark-filter-pill active" data-filter="all">All</button>
+          <button class="log-filter-btn dark-filter-pill" data-filter="mcp" id="pill-filter-mcp">MCP Only</button>
+          <button class="log-filter-btn dark-filter-pill" data-filter="dashboard">Dashboard</button>
+          <button class="log-filter-btn dark-filter-pill" data-filter="controller">Controller</button>
+        </div>
+      </div>
+
+      <!-- Quick MCP Execution Bar -->
+      <div
+        style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+        <span
+          style="font-family: var(--font-heading); font-size: 0.7rem; font-weight: 700; color: var(--color-accent-pink); display: flex; align-items: center; margin-right: 0.2rem;">
+          TEST MCP:
+        </span>
+        <button class="mcp-action-btn dark-filter-pill" id="btn-mcp-status"
+          style="border-color: rgba(255, 61, 154, 0.4); color: #FFF; cursor: pointer;">
+          🔍 get_status
+        </button>
+        <button class="mcp-action-btn dark-filter-pill" id="btn-mcp-split-50"
+          style="border-color: rgba(255, 61, 154, 0.4); color: #FFF; cursor: pointer;">
+          ⚡ set_split (50/50)
+        </button>
+        <button class="mcp-action-btn dark-filter-pill" id="btn-mcp-rollout-ab"
+          style="border-color: rgba(255, 61, 154, 0.4); color: #FFF; cursor: pointer;">
+          🚀 safe_rollout (A &rarr; B)
+        </button>
+        <button class="mcp-action-btn dark-filter-pill" id="btn-mcp-invalid-test"
+          style="border-color: rgba(255, 61, 154, 0.4); color: #FFF; cursor: pointer;"
+          title="Test invalid operation rejection">
+          🛡️ test_reject
+        </button>
+      </div>
+
+      <div class="dark-log-stream" id="log-stream">
+        <div
+          style="color: #7B7B93; font-family: var(--font-mono); font-size: 0.75rem; text-align: center; padding: 2rem;">
+          Waiting for live controller telemetry...
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SaaS Footer with uppercase headings, navy links, divider -->
+  <footer class="saas-footer">
+    <div class="footer-content-grid">
+      <div>
+        <div class="brand-name" style="margin-bottom: 0.5rem;">Botpresso</div>
+        <p style="font-size: 0.85rem; color: var(--color-text-body); max-width: 320px;">
+          Production-grade Docker load balancing and zero-downtime orchestration powered by Model Context Protocol.
+        </p>
+      </div>
+      <div>
+        <div class="footer-col-heading">Architecture</div>
+        <ul class="footer-links">
+          <li><a href="/api/status" target="_blank">Controller API</a></li>
+          <li><a href="/service" target="_blank">Ingress Proxy</a></li>
+          <li><a href="/api/events" target="_blank">SSE Stream</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="footer-col-heading">MCP Tools</div>
+        <ul class="footer-links">
+          <li><a href="#">get_status</a></li>
+          <li><a href="#">safe_rollout</a></li>
+          <li><a href="#">traffic_split</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="footer-col-heading">Safety & SLA</div>
+        <ul class="footer-links">
+          <li><a href="#">Graceful Draining</a></li>
+          <li><a href="#">Rollout Timeout</a></li>
+          <li><a href="#">Stop Invariants</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-divider"></div>
+    <div class="footer-bottom">
+      <div>&copy; 2026 Botpresso Systems Engineering. All rights reserved.</div>
+      <div style="font-family: var(--font-mono); font-size: 0.75rem;">Status: <span
+          style="color: var(--color-emerald); font-weight: 700;">ALL SYSTEMS OPERATIONAL</span></div>
+    </div>
+  </footer>
+
+  <script src="app.js?v=2"></script>
+</body>
+
+</html>

@@ -1,0 +1,63 @@
+services:
+  controller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: botpresso-controller
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PORT=8000
+      - APP_A_HOST=botpresso-app-a
+      - APP_A_PORT=8080
+      - APP_B_HOST=botpresso-app-b
+      - APP_B_PORT=8080
+      - APP_A_DOCKER_NAME=botpresso-app-a
+      - APP_B_DOCKER_NAME=botpresso-app-b
+      - HEALTH_CHECK_INTERVAL_MS=1000
+      - HEALTH_CHECK_TIMEOUT_MS=1500
+      - DRAIN_TIMEOUT_MS=5000
+      - ROLLOUT_HEALTH_TIMEOUT_MS=12000
+      - NODE_ENV=production
+    depends_on:
+      - app-a
+    networks:
+      - botpresso-net
+
+  app-a:
+    build:
+      context: ./apps/app-backend
+      dockerfile: Dockerfile
+    container_name: botpresso-app-a
+    restart: unless-stopped
+    ports:
+      - "8001:8080"
+    environment:
+      - PORT=8080
+      - CONTAINER_NAME=A
+      - NODE_ENV=production
+    networks:
+      - botpresso-net
+
+  app-b:
+    build:
+      context: ./apps/app-backend
+      dockerfile: Dockerfile
+    container_name: botpresso-app-b
+    # Initially app-b is built and can be started dynamically by controller, or initially running
+    restart: unless-stopped
+    ports:
+      - "8002:8080"
+    environment:
+      - PORT=8080
+      - CONTAINER_NAME=B
+      - NODE_ENV=production
+    networks:
+      - botpresso-net
+
+networks:
+  botpresso-net:
+    driver: bridge
