@@ -4,6 +4,12 @@ Zero-downtime HTTP load balancer routing traffic between two Docker containers (
 
 ---
 
+## Demo Video Sequence
+
+- **Demo Video Link**: [Watch the Demo Video (YouTube)](https://youtu.be/eibLVI8H9jE)
+
+---
+
 ## Quickstart
 
 ### Prerequisites
@@ -191,10 +197,6 @@ npm run traffic:cli 120 http://localhost:8000/service
 ```
 
 ---
-
-## Demo Video Sequence
-
-- **Demo Video Link**: [Watch the Demo Video (YouTube)](https://youtu.be/eibLVI8H9jE)
 
 ### 7-Step Demonstration Sequence:
 1. **Traffic on Container A**: Traffic generator sends requests; ingress returns `X-Handled-By: Container A` with 100% success.
