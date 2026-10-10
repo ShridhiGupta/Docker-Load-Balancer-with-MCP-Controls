@@ -15,9 +15,9 @@ let totalTests = 0;
 let passedTests = 0;
 let failedTests = 0;
 
-function assert(condition: boolean, testName: string, detail?: string) {
+function assert(condition: boolean | undefined | null | unknown, testName: string, detail?: string) {
   totalTests++;
-  if (condition) {
+  if (Boolean(condition)) {
     passedTests++;
     console.log(`  \x1b[32m✔ [PASS]\x1b[0m ${testName}`);
   } else {
@@ -129,7 +129,7 @@ async function runAllTests() {
   // 2. Reject traffic split change during active rollout
   const splitDuringRollout = stateManager.setTrafficSplit(80, 20, 'dashboard');
   assert(!splitDuringRollout.success, 'Case C.2: Split change is rejected during active rollout');
-  assert(splitDuringRollout.error?.includes('in progress'),
+  assert(Boolean(splitDuringRollout.error?.includes('in progress')),
     'Case C.3: Rejection reason clearly states rollout is in progress');
 
   // 3. Reject container stop during active rollout

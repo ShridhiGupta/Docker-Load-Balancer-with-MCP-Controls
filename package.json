@@ -12,7 +12,8 @@
     "traffic:cli": "tsx scripts/traffic-cli.ts",
     "split": "tsx scripts/split-cli.ts",
     "demo": "tsx scripts/mcp-client-demo.ts",
-    "test": "tsx scripts/test-all.ts"
+    "test": "tsx scripts/test-all.ts",
+    "test:dashboard": "tsx scripts/test-dashboard-11.ts"
   },
   "keywords": [
     "load-balancer",
