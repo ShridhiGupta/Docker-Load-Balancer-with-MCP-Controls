@@ -1,5 +1,9 @@
 import dotenv from 'dotenv';
+import fs from 'fs';
 dotenv.config();
+
+// Auto-detect whether running inside Docker container or on the host OS
+const isInsideDocker = fs.existsSync('/.dockerenv');
 
 export const CONFIG = {
   // Controller HTTP Port (Serves Ingress, Dashboard, API, SSE)
@@ -10,8 +14,8 @@ export const CONFIG = {
     id: 'A' as const,
     name: 'Container A',
     dockerContainerName: process.env.APP_A_DOCKER_NAME || 'botpresso-app-a',
-    host: process.env.APP_A_HOST || (process.env.NODE_ENV === 'production' ? 'botpresso-app-a' : 'localhost'),
-    port: parseInt(process.env.APP_A_PORT || '8001', 10),
+    host: isInsideDocker ? (process.env.APP_A_HOST || 'botpresso-app-a') : 'localhost',
+    port: isInsideDocker ? parseInt(process.env.APP_A_PORT || '8080', 10) : 8001,
   },
 
   // Backend Container B configuration
@@ -19,8 +23,8 @@ export const CONFIG = {
     id: 'B' as const,
     name: 'Container B',
     dockerContainerName: process.env.APP_B_DOCKER_NAME || 'botpresso-app-b',
-    host: process.env.APP_B_HOST || (process.env.NODE_ENV === 'production' ? 'botpresso-app-b' : 'localhost'),
-    port: parseInt(process.env.APP_B_PORT || '8002', 10),
+    host: isInsideDocker ? (process.env.APP_B_HOST || 'botpresso-app-b') : 'localhost',
+    port: isInsideDocker ? parseInt(process.env.APP_B_PORT || '8080', 10) : 8002,
   },
 
   // Operational Timeouts & Intervals

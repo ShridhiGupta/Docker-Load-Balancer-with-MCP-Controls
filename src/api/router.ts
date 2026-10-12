@@ -202,6 +202,30 @@ apiRouter.post('/mcp/execute', async (req: Request, res: Response) => {
       const { limit = 30, source } = params;
       const logs = eventLogger.getLogs(limit, source === 'all' ? undefined : source);
       res.json({ result: logs });
+    } else if (tool === 'force_container_unhealthy') {
+      const { container, unhealthy } = params;
+      const c = stateManager.getContainer(container as ContainerId);
+      const endpoint = unhealthy ? '/chaos/unhealthy' : '/chaos/healthy';
+      try {
+        await fetch(`http://${c.host}:${c.port}${endpoint}`, { method: 'POST' });
+        eventLogger.log('CHAOS_HEALTH_OVERRIDE', 'mcp', 'success', { container, unhealthy });
+        res.json({ result: `Container ${container} forced health state: ${unhealthy ? 'UNHEALTHY' : 'HEALTHY'}.` });
+      } catch (err: any) {
+        res.status(500).json({ isError: true, error: err.message });
+      }
+    } else if (tool === 'control_traffic_generator') {
+      const { action, rpm } = params;
+      let stats;
+      if (action === 'start') {
+        stats = trafficGenerator.start(rpm, 'mcp');
+      } else if (action === 'stop') {
+        stats = trafficGenerator.stop('mcp');
+      } else {
+        stats = trafficGenerator.setRpm(rpm || 60, 'mcp');
+      }
+      res.json({
+        result: `Traffic Generator ${action.toUpperCase()} complete. Total Sent: ${stats.totalSent}, Success: ${stats.successCount}, Failed: ${stats.failedCount}, RPM: ${stats.rpm}.`,
+      });
     } else {
       res.status(400).json({ error: `Unknown MCP tool: ${tool}` });
     }

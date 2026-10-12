@@ -1,10 +1,65 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { stateManager } from '../core/state-manager.js';
-import { rolloutManager } from '../core/rollout-manager.js';
-import { eventLogger } from '../core/event-logger.js';
-import { trafficGenerator } from '../core/traffic-generator.js';
-import { ContainerId } from '../types/state.js';
+import { CONFIG } from '../config.js';
+
+/**
+ * Execute tool directly against the live running Load Balancer Controller HTTP API.
+ * This guarantees:
+ * 1. OpenCode queries the exact live state running in Docker/Dashboard (127.0.0.1:8000).
+ * 2. Any modifications trigger real SSE events and immediately reflect on the Web Dashboard.
+ * 3. All operations appear in the "Live Controller & MCP Audit Stream" tagged with [MCP].
+ * 4. Tries IPv4 (127.0.0.1) first to avoid Windows IPv6 localhost resolution issues.
+ */
+async function executeViaController(
+  tool: string,
+  params: Record<string, any> = {}
+): Promise<{ isError: boolean; text: string }> {
+  const port = CONFIG.PORT || 8000;
+  const urls = [
+    `http://127.0.0.1:${port}/api/mcp/execute`,
+    `http://localhost:${port}/api/mcp/execute`,
+  ];
+
+  let lastError: any = null;
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tool, params }),
+      });
+
+      const data = (await res.json()) as any;
+      if (!res.ok || data.isError) {
+        return {
+          isError: true,
+          text: data.error || `Operation Rejected / Failed (HTTP ${res.status})`,
+        };
+      }
+
+      const outputText =
+        typeof data.result === 'string'
+          ? data.result
+          : JSON.stringify(data.result, null, 2);
+
+      return {
+        isError: false,
+        text: outputText,
+      };
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+
+  console.error('[MCP Controller Bridge Error]:', lastError);
+  return {
+    isError: true,
+    text: `Error connecting to Live Load Balancer Controller at http://127.0.0.1:${port}: ${lastError?.message || lastError}. Ensure Docker containers and controller are running.`,
+  };
+}
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -13,23 +68,18 @@ export function createMcpServer(): McpServer {
   });
 
   /**
-   * 1. Tool: get_status (or status)
-   * Returns state, health, split (configured & effective), counts, and errors.
+   * 1. Tool: get_status
+   * Returns state, health, split (configured & effective), counts, and metrics from live controller.
    */
   server.tool(
     'get_status',
     'Get full status of the load balancer, containers A and B, traffic split, in-flight counts, and metrics',
     {},
     async () => {
-      eventLogger.log('MCP_GET_STATUS', 'mcp', 'success', {});
-      const status = stateManager.getFullStatus();
+      const result = await executeViaController('get_status', {});
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(status, null, 2),
-          },
-        ],
+        isError: result.isError,
+        content: [{ type: 'text', text: result.text }],
       };
     }
   );
@@ -46,26 +96,10 @@ export function createMcpServer(): McpServer {
       splitB: z.number().min(0).max(100).describe('Traffic percentage for Container B (0-100)'),
     },
     async ({ splitA, splitB }) => {
-      const result = stateManager.setTrafficSplit(splitA, splitB, 'mcp');
-      if (!result.success) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Operation Rejected: ${result.error}`,
-            },
-          ],
-        };
-      }
-
+      const result = await executeViaController('set_traffic_split', { splitA, splitB });
       return {
-        content: [
-          {
-            type: 'text',
-            text: `Successfully updated traffic split to A=${splitA}%, B=${splitB}%. Effective split: A=${result.effectiveSplit.effectiveA}%, B=${result.effectiveSplit.effectiveB}%.`,
-          },
-        ],
+        isError: result.isError,
+        content: [{ type: 'text', text: result.text }],
       };
     }
   );
@@ -82,26 +116,10 @@ export function createMcpServer(): McpServer {
       timeoutMs: z.number().optional().describe('Timeout in milliseconds to wait for health (default 12000)'),
     },
     async ({ container, timeoutMs }) => {
-      const result = await rolloutManager.startContainerAndWait(container as ContainerId, 'mcp', timeoutMs);
-      if (!result.success) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Start Failed: ${result.error}`,
-            },
-          ],
-        };
-      }
-
+      const result = await executeViaController('start_container', { container, timeoutMs });
       return {
-        content: [
-          {
-            type: 'text',
-            text: result.message,
-          },
-        ],
+        isError: result.isError,
+        content: [{ type: 'text', text: result.text }],
       };
     }
   );
@@ -117,26 +135,10 @@ export function createMcpServer(): McpServer {
       container: z.enum(['A', 'B']).describe('Container identifier to stop ("A" or "B")'),
     },
     async ({ container }) => {
-      const result = await rolloutManager.gracefulStop(container as ContainerId, 'mcp');
-      if (!result.success) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Stop Rejected / Failed: ${result.error}`,
-            },
-          ],
-        };
-      }
-
+      const result = await executeViaController('stop_container', { container });
       return {
-        content: [
-          {
-            type: 'text',
-            text: result.message,
-          },
-        ],
+        isError: result.isError,
+        content: [{ type: 'text', text: result.text }],
       };
     }
   );
@@ -153,32 +155,16 @@ export function createMcpServer(): McpServer {
       to: z.enum(['A', 'B']).describe('Target container to roll out to ("A" or "B")'),
     },
     async ({ from, to }) => {
-      const result = await rolloutManager.executeSafeRollout(from as ContainerId, to as ContainerId, 'mcp');
-      if (!result.success) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Safe Rollout Aborted / Failed: ${result.error || result.message}`,
-            },
-          ],
-        };
-      }
-
+      const result = await executeViaController('safe_rollout', { from, to });
       return {
-        content: [
-          {
-            type: 'text',
-            text: result.message,
-          },
-        ],
+        isError: result.isError,
+        content: [{ type: 'text', text: result.text }],
       };
     }
   );
 
   /**
-   * 6. Tool: get_recent_logs (or recent_logs)
+   * 6. Tool: get_recent_logs
    * Returns recent controller events.
    */
   server.tool(
@@ -189,15 +175,10 @@ export function createMcpServer(): McpServer {
       source: z.enum(['all', 'mcp', 'dashboard', 'controller', 'traffic-gen']).optional().describe('Filter logs by source'),
     },
     async ({ limit = 30, source }) => {
-      const filterSource = source && source !== 'all' ? source : undefined;
-      const logs = eventLogger.getLogs(limit, filterSource as any);
+      const result = await executeViaController('get_recent_logs', { limit, source });
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(logs, null, 2),
-          },
-        ],
+        isError: result.isError,
+        content: [{ type: 'text', text: result.text }],
       };
     }
   );
@@ -214,30 +195,11 @@ export function createMcpServer(): McpServer {
       unhealthy: z.boolean().describe('True to force unhealthy, False to restore health'),
     },
     async ({ container, unhealthy }) => {
-      const c = stateManager.getContainer(container as ContainerId);
-      const endpoint = unhealthy ? '/chaos/unhealthy' : '/chaos/healthy';
-      try {
-        await fetch(`http://${c.host}:${c.port}${endpoint}`, { method: 'POST' });
-        eventLogger.log('CHAOS_HEALTH_OVERRIDE', 'mcp', 'success', { container, unhealthy });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Container ${container} forced health state: ${unhealthy ? 'UNHEALTHY' : 'HEALTHY'}.`,
-            },
-          ],
-        };
-      } catch (err: any) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Failed to set chaos health on Container ${container}: ${err.message}`,
-            },
-          ],
-        };
-      }
+      const result = await executeViaController('force_container_unhealthy', { container, unhealthy });
+      return {
+        isError: result.isError,
+        content: [{ type: 'text', text: result.text }],
+      };
     }
   );
 
@@ -252,22 +214,10 @@ export function createMcpServer(): McpServer {
       rpm: z.number().optional().describe('Requests per minute (for start or set_rpm)'),
     },
     async ({ action, rpm }) => {
-      let stats;
-      if (action === 'start') {
-        stats = trafficGenerator.start(rpm, 'mcp');
-      } else if (action === 'stop') {
-        stats = trafficGenerator.stop('mcp');
-      } else {
-        stats = trafficGenerator.setRpm(rpm || 60, 'mcp');
-      }
-
+      const result = await executeViaController('control_traffic_generator', { action, rpm });
       return {
-        content: [
-          {
-            type: 'text',
-            text: `Traffic Generator ${action.toUpperCase()} complete. Total Sent: ${stats.totalSent}, Success: ${stats.successCount}, Failed: ${stats.failedCount}, RPM: ${stats.rpm}.`,
-          },
-        ],
+        isError: result.isError,
+        content: [{ type: 'text', text: result.text }],
       };
     }
   );
